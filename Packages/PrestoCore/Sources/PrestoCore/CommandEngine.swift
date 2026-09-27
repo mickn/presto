@@ -60,6 +60,7 @@ public final class CommandEngine {
     public var thresholds = Thresholds()
 
     private let classifier: Classifier
+    private let appNames: [[String]]
     private let clock = ContinuousClock()
 
     private enum ClauseState {
@@ -98,6 +99,7 @@ public final class CommandEngine {
 
     public init(classifier: Classifier) {
         self.classifier = classifier
+        appNames = Segmenter.tokens(forAppNames: classifier.catalog.entries.map(\.name))
     }
 
     public var isActive: Bool { start != nil && !finished }
@@ -131,7 +133,7 @@ public final class CommandEngine {
     /// The whole utterance so far, finalized words plus the recognizer's current guess.
     public func update(transcript: String) {
         guard start != nil, !ended, !cancelled else { return }
-        let next = Segmenter.split(transcript)
+        let next = Segmenter.split(transcript, appNames: appNames)
         guard next != segmentation else { return }
         segmentation = next
         onEvent(.transcript(transcript))
@@ -147,7 +149,7 @@ public final class CommandEngine {
     public func end(transcript: String? = nil, speechEndedAt: ContinuousClock.Instant? = nil, refining: Bool = false) {
         guard start != nil, !ended else { return }
         if let transcript, !cancelled {
-            let next = Segmenter.split(transcript)
+            let next = Segmenter.split(transcript, appNames: appNames)
             if next != segmentation {
                 segmentation = next
                 onEvent(.transcript(transcript))
@@ -171,7 +173,7 @@ public final class CommandEngine {
     /// A better transcript of the whole utterance, used only for the text of free-text commands.
     public func refine(transcript: String) {
         guard ended, awaitingRefinement else { return }
-        refinement = Segmenter.split(transcript)
+        refinement = Segmenter.split(transcript, appNames: appNames)
         awaitingRefinement = false
         evaluate()
     }
@@ -326,9 +328,11 @@ public final class CommandEngine {
         var verb = d.verb
         var verbConfidence = d.verbConfidence
 
-        // "open Safari and Slack": a bare app name continues the previous app verb.
-        if !verb.isAction, let app = d.app, d.appConfidence >= thresholds.earlyTarget, clause.index > 0,
-           case let .executed(previous, _, _)? = states[clause.index - 1], previous.verb.needsApp, previous.app != app {
+        // "quit Calculator, Chess and Weather": a clause that is just an app name always continues
+        // the previous app verb; so does an unclear clause that clearly names an app.
+        if let app = d.app, clause.index > 0,
+           case let .executed(previous, _, _)? = states[clause.index - 1], previous.verb.needsApp, previous.app != app,
+           isBareAppName(clause.text) ? d.appConfidence >= thresholds.settled : (!verb.isAction && d.appConfidence >= thresholds.earlyTarget) {
             verb = previous.verb
             verbConfidence = d.appConfidence
         }
@@ -361,6 +365,14 @@ public final class CommandEngine {
             }
         }
         return .action(action, strong: strong)
+    }
+
+    /// "chess", "the calculator app": nothing but an app name.
+    private func isBareAppName(_ text: String) -> Bool {
+        var words = text.split(separator: " ").map(String.init)
+        if words.first == "the" { words.removeFirst() }
+        if words.last == "app" { words.removeLast() }
+        return appNames.contains(words)
     }
 
     static func payload(_ verb: Verb, from text: String) -> String? {

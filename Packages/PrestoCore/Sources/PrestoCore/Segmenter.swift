@@ -46,12 +46,22 @@ public enum Segmenter {
         return result
     }
 
-    public static func split(_ transcript: String) -> Segmentation {
+    /// App names as normalized words, for `split(_:appNames:)`.
+    public static func tokens(forAppNames names: [String]) -> [[String]] {
+        names.map { $0.split(whereSeparator: \.isWhitespace).map { normalize(String($0)) }.filter { !$0.isEmpty } }
+            .filter { !$0.isEmpty }
+            .sorted { $0.count > $1.count }
+    }
+
+    /// With `appNames`, a second app name inside one clause starts a new clause, because
+    /// recognizers often drop the comma in "quit Calculator, Chess".
+    public static func split(_ transcript: String, appNames: [[String]] = []) -> Segmentation {
         let words = transcript.split(whereSeparator: \.isWhitespace).map(String.init)
         var clauses: [Clause] = []
         var current: [String] = []
         var currentStart = 0
         var currentIsCorrection = false
+        var currentHasApp = false
 
         func close(nextStart: Int) {
             if !current.isEmpty {
@@ -61,6 +71,14 @@ public enum Segmenter {
             current = []
             currentStart = nextStart
             currentIsCorrection = false
+            currentHasApp = false
+        }
+
+        func appNameLength(at i: Int) -> Int {
+            for name in appNames where i + name.count <= words.count {
+                if words[i ..< i + name.count].map(normalize) == name { return name.count }
+            }
+            return 0
         }
 
         var i = 0
@@ -94,6 +112,20 @@ public enum Segmenter {
                 // At the very start it is just a filler word.
                 currentIsCorrection = correctsSomething
                 i += length
+                continue
+            }
+
+            let nameLength = appNameLength(at: i)
+            if nameLength > 0 {
+                if currentHasApp { close(nextStart: i) }
+                let last = i + nameLength - 1
+                current += words[i ... last].map(normalize)
+                currentHasApp = true
+                let raw = words[last]
+                i += nameLength
+                if raw.hasSuffix(",") || raw.hasSuffix(".") || raw.hasSuffix("?") || raw.hasSuffix("!") || raw.hasSuffix(";") {
+                    close(nextStart: i)
+                }
                 continue
             }
 

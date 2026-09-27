@@ -113,6 +113,8 @@ final class LiveTranscriber {
     /// A short pause after some words: a hint that the current clause may be complete.
     var onPause: () -> Void = {}
     var onLevel: (Float) -> Void = { _ in }
+    /// A recording started playing into the recognizer (for lining logs up with the audio).
+    var onAudioStarted: () -> Void = {}
     /// Off while the shortcut is held down: releasing it ends the utterance instead.
     var endsOnSilence = true
 
@@ -165,7 +167,27 @@ final class LiveTranscriber {
            let request = try await AssetInventory.assetInstallationRequest(supporting: modules) {
             try await request.downloadAndInstall()
         }
+        await warmUp(modules)
         return locale
+    }
+
+    /// Loading the models takes seconds the first time; without this the first command after launch
+    /// is transcribed only after the speaker has finished. Runs a moment of silence through them.
+    private static func warmUp(_ modules: [any SpeechModule]) async {
+        guard let format = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: modules),
+              let silence = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(format.sampleRate / 2)) else { return }
+        silence.frameLength = silence.frameCapacity
+        for channel in 0 ..< Int(format.channelCount) {
+            silence.floatChannelData?[channel].update(repeating: 0, count: Int(silence.frameLength))
+            silence.int16ChannelData?[channel].update(repeating: 0, count: Int(silence.frameLength))
+        }
+        let analyzer = SpeechAnalyzer(modules: modules, options: .init(priority: .userInitiated, modelRetention: .processLifetime))
+        let (stream, continuation) = AsyncStream<AnalyzerInput>.makeStream()
+        continuation.yield(AnalyzerInput(buffer: silence))
+        continuation.finish()
+        try? await analyzer.prepareToAnalyze(in: format)
+        try? await analyzer.start(inputSequence: stream)
+        try? await analyzer.finalizeAndFinishThroughEndOfInput()
     }
 
     static func microphoneAccess() async -> Bool {
@@ -178,7 +200,8 @@ final class LiveTranscriber {
 
     // MARK: Running
 
-    func start(source: Source, locale: Locale) async throws {
+    /// `vocabulary` biases recognition toward words people will say, like installed app names.
+    func start(source: Source, locale: Locale, vocabulary: [String] = []) async throws {
         await cancel()
         finalized = []
         volatile = ""
@@ -216,6 +239,7 @@ final class LiveTranscriber {
             audioEngine = engine
         case let .file(url):
             let file = try AVAudioFile(forReading: url)
+            onAudioStarted()
             fileTask = Task.detached { [weak self] in
                 await Self.play(file, into: pump)
                 await MainActor.run { self?.fileEnded = .now }
@@ -239,6 +263,11 @@ final class LiveTranscriber {
                     self?.receivedAccurate(text: String(result.text.characters), isFinal: result.isFinal)
                 }
             } catch {}
+        }
+        if !vocabulary.isEmpty {
+            let context = AnalysisContext()
+            context.contextualStrings[.general] = vocabulary
+            try? await analyzer.setContext(context)
         }
         try await analyzer.prepareToAnalyze(in: format)
         try await analyzer.start(inputSequence: stream)
@@ -344,7 +373,8 @@ final class LiveTranscriber {
         var ended = false
         if let fileEnded, now - fileEnded > .milliseconds(1500) { ended = true }
         if endsOnSilence {
-            if heardVoice, hasWords, now - lastVoice > .milliseconds(800) { ended = true }
+            // The recognizer can trail the voice; don't stop while words are still arriving.
+            if heardVoice, hasWords, now - lastVoice > .milliseconds(800), now - lastChange > .milliseconds(400) { ended = true }
             if hasWords, now - lastChange > .milliseconds(2000), now - lastVoice > .milliseconds(500) { ended = true }
             if !hasWords, now - started > .seconds(8) { ended = true }
         }

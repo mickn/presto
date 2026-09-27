@@ -29,6 +29,14 @@ import Testing
         #expect(s.originalText(from: s.clauses[0].firstWord) == "Type Hello, World and more")
     }
 
+    @Test func secondAppNameStartsANewClause() {
+        let names = Segmenter.tokens(forAppNames: ["Calculator", "Chess", "Google Chrome", "App Store"])
+        let s = Segmenter.split("Quit calculator chess and weather", appNames: names)
+        #expect(s.clauses.map(\.text) == ["quit calculator", "chess", "weather"])
+        #expect(Segmenter.split("open google chrome", appNames: names).clauses.map(\.text) == ["open google chrome"])
+        #expect(Segmenter.split("open the app store", appNames: names).clauses.count == 1)
+    }
+
     @Test func trailingJoinerClosesTheClause() {
         let s = Segmenter.split("open slack and")
         #expect(s.clauses.map(\.text) == ["open slack"])

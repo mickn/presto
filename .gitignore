@@ -4,3 +4,6 @@ build/
 xcuserdata/
 *.xcodeproj/
 .DS_Store
+demo/*.json
+demo/voices/
+__pycache__/

@@ -3,17 +3,6 @@ import AVFoundation
 import Observation
 import PrestoCore
 
-/// One action in the HUD.
-struct Chip: Identifiable, Equatable {
-    enum Status: Equatable { case running, done, skipped(String), failed(String), undone }
-
-    let id = UUID()
-    var action: Action
-    var status: Status = .running
-    /// Seconds before the speaker finished; filled in at the end of the utterance.
-    var early: Double?
-}
-
 /// Launch options for automated runs: `--simulate-audio <file>`, `--simulate-text "<sentence>"`,
 /// `--dry-run`, `--exit-when-done`.
 struct LaunchOptions {
@@ -44,7 +33,7 @@ struct LaunchOptions {
 @Observable
 @MainActor
 final class AppModel {
-    enum Phase: Equatable { case idle, starting, listening, finishing }
+    typealias Phase = ListeningPhase
 
     // MARK: State the UI reads
 
@@ -55,6 +44,10 @@ final class AppModel {
     private(set) var recent: [String] = []
     private(set) var notice: String?
     private(set) var cancelled = false
+    var hudState: HUDState {
+        HUDState(phase: phase, transcript: transcript, level: level, chips: chips, notice: notice, cancelled: cancelled)
+    }
+
     private(set) var hasKey = false
     private(set) var microphoneAllowed = false
     private(set) var accessibilityAllowed = false
@@ -102,6 +95,7 @@ final class AppModel {
         executor.onUndo = { [weak self] action in self?.markUndone(action) }
         transcriber.onTranscript = { [weak self] text in self?.heard(text) }
         transcriber.onLevel = { [weak self] level in self?.level = level }
+        transcriber.onAudioStarted = { EventLog.write("audio_start") }
         transcriber.onSpeechEnded = { [weak self] in self?.finishListening() }
         transcriber.onPause = { [weak self] in self?.engine?.pause() }
 
@@ -225,7 +219,7 @@ final class AppModel {
         EventLog.write("listen_start", ["source": source == .microphone ? "microphone" : "file"])
         Task {
             do {
-                try await transcriber.start(source: source, locale: locale)
+                try await transcriber.start(source: source, locale: locale, vocabulary: executor.catalog.entries.map(\.name))
                 if phase == .starting { phase = .listening }
             } catch {
                 EventLog.write("listen_failed", ["error": error.localizedDescription])
@@ -291,7 +285,8 @@ final class AppModel {
         case let .fired(fired):
             EventLog.write("fired", [
                 "action": fired.action.description, "after_start_ms": Int(fired.afterStart.milliseconds),
-                "heard": fired.transcriptAtFire,
+                "heard": fired.transcriptAtFire, "verb": fired.action.verb.rawValue,
+                "app": fired.action.app ?? "", "level": fired.action.level ?? -1, "text": fired.action.text ?? "",
             ])
         case .transcript:
             break

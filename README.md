@@ -5,6 +5,10 @@ set the volume to 30" and Calculator is open before you reach "volume".
 
 Tap **⌃⌥Space** and speak (it stops when you pause), or hold it while you talk.
 
+**Demo:** [demo/presto-demo.mp4](demo/presto-demo.mp4) (50 s). Each spoken command was played into
+Presto and really executed on a Mac, and the video is rendered from that run's event log, so every
+timing shown is measured.
+
 ## How it works
 
 ```
@@ -85,6 +89,14 @@ scripts/simulate.py --suite             # `say` audio through the real app pipel
 
 ```bash
 scripts/simulate.py --execute "open calculator and then open chess"   # really does it
+```
+
+To make the demo video: put voice files named after the ids in `scripts/make_demo.py` (plus optional
+`music.mp3` and `sfx.mp3`) in a folder, then run the script. It really executes the commands; add
+`--dry-run` to only show them, or `--timeline <saved.timeline.json>` to re-render a saved run.
+
+```bash
+scripts/make_demo.py --voices path/to/voices --out demo/presto-demo.mp4
 ```
 
 Every run writes JSON lines to `~/Library/Logs/Presto/events.jsonl`: each transcript update, each

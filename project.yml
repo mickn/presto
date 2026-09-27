@@ -45,3 +45,16 @@ targets:
         NSSpeechRecognitionUsageDescription: Presto turns your voice commands into text on this Mac.
         NSAppleEventsUsageDescription: Presto switches dark mode through System Events when you ask it to.
         NSHumanReadableCopyright: "© 2026 Mick Niepoth"
+  PrestoDemo:
+    type: tool
+    platform: macOS
+    sources:
+      - path: App/PrestoDemo
+      - path: App/Presto/HUDViews.swift
+    dependencies:
+      - package: PrestoCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mickniepoth.presto.demo
+        ENABLE_HARDENED_RUNTIME: NO
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor

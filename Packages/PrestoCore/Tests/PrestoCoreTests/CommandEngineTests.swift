@@ -253,6 +253,17 @@ final class Harness {
         #expect(h.performed == ["open_app Notes", "open_app Calculator"])
     }
 
+    @Test func bareAppNamesKeepThePreviousVerb() async {
+        let h = Harness([
+            "quit calculator": .init(verb: .quitApp, app: "Calculator"),
+            "notes": .init(verb: .openApp, confidence: 0.9, app: "Notes"),
+            "slack": .init(verb: .webSearch, confidence: 0.7, app: "Slack"),
+        ])
+        await h.say("Quit calculator, notes and slack")
+        await h.end()
+        #expect(h.performed == ["quit_app Calculator", "quit_app Notes", "quit_app Slack"])
+    }
+
     @Test func recognizerRevisionSwapsAnOpenedApp() async {
         let h = Harness([
             "open safari": .init(verb: .openApp, app: "Safari"),

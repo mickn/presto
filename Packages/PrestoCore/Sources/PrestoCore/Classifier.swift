@@ -56,7 +56,8 @@ public struct Classifier: Sendable {
     """
     static let appInstructions = """
     A person is speaking a voice command to their Mac. 'command' comes from a live transcript and may stop \
-    mid-word. Which installed application does 'command' refer to? Ignore apps named only in 'earlier'.
+    mid-word, and speech recognition may have written an app name as a similar-sounding word ('whether' for \
+    Weather). Which installed application does 'command' refer to? Ignore apps named only in 'earlier'.
     """
     static let levelInstructions = "If 'command' sets the volume to a specific level, which level?"
 
