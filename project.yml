@@ -1,0 +1,47 @@
+name: Presto
+options:
+  bundleIdPrefix: com.mickniepoth
+  deploymentTarget:
+    macOS: "26.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    DEVELOPMENT_TEAM: SG5LTCEH7L
+    CODE_SIGN_STYLE: Automatic
+    SWIFT_VERSION: "6.0"
+    SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+    SWIFT_APPROACHABLE_CONCURRENCY: YES
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+packages:
+  PrestoCore:
+    path: Packages/PrestoCore
+targets:
+  Presto:
+    type: application
+    platform: macOS
+    sources:
+      - path: App/Presto
+    dependencies:
+      - package: PrestoCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mickniepoth.presto
+        PRODUCT_NAME: Presto
+        CODE_SIGN_ENTITLEMENTS: App/Presto/Presto.entitlements
+        ENABLE_HARDENED_RUNTIME: YES
+        COMBINE_HIDPI_IMAGES: YES
+    info:
+      path: App/Presto/Info.plist
+      properties:
+        CFBundleDisplayName: Presto
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSUIElement: true
+        LSApplicationCategoryType: public.app-category.productivity
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        NSMicrophoneUsageDescription: Presto listens for your voice commands while you hold or tap its shortcut.
+        NSSpeechRecognitionUsageDescription: Presto turns your voice commands into text on this Mac.
+        NSAppleEventsUsageDescription: Presto switches dark mode through System Events when you ask it to.
+        NSHumanReadableCopyright: "© 2026 Mick Niepoth"
